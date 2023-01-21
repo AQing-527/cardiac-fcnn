@@ -26,36 +26,37 @@ if __name__ == '__main__':
         json_filenames = os.listdir(json_dir)
         json_filenames = sorted(json_filenames)
         for json_filename in json_filenames:
-            print(json_filename)
+            # print(json_filename)
             json_path = os.path.join(json_dir, json_filename)
             with open(json_path) as json_file:
                 anno = json.load(json_file)
             nrrd_filename = os.path.basename(anno['rawDataFilePath'])
+            # print(nrrd_filename)
             nrrd_path = os.path.join(nrrd_dir, nrrd_filename)
-            filename_wo_ext = os.path.splitext(json_filename)[0]
+            # filename_wo_ext = os.path.splitext(json_filename)[0]
             for fid_datum in anno['fidData']:
                 time_idx = fid_datum['Time Index']
                 i, j, k = fid_datum['Position-IJK']
                 struct_name = fid_datum['Structure Name']
                 struct_idx = utils.get_struct_idx(struct_name)
 
-                view_name = fid_datum['View Name']
-                view_idx = utils.get_view_index(view_name, 'name')
-                view_abbr = utils.get_view_abbr(view_idx)
-                view_dir = os.path.join(meta_dir, view_abbr)
-                utils.ensure_dir(view_dir)
+                # view_name = fid_datum['View Name']
+                # view_idx = utils.get_view_index(view_name, 'name')
+                # view_abbr = utils.get_view_abbr(view_idx)
+                # view_dir = os.path.join(meta_dir, view_abbr)
+                # utils.ensure_dir(view_dir)
 
-                view_filename = f'{filename_wo_ext}.csv'
-                view_path = os.path.join(view_dir, view_filename)
-                if not os.path.exists(view_path):
-                    with open(view_path, 'w') as view_file:
+                output_filename = f'metadata.csv'
+                output_path = os.path.join(meta_dir, output_filename)
+                if not os.path.exists(output_path):
+                    with open(output_path, 'w') as view_file:
                         csv_writer = csv.writer(view_file)
                         csv_head = ['nrrd', 'time', 'struct', 'i', 'j', 'k']
                         csv_writer.writerow(csv_head)
                         data_row = [nrrd_path, time_idx, struct_idx, i, j, k]
                         csv_writer.writerow(data_row)
                 else:
-                    with open(view_path, 'a+') as view_file:
+                    with open(output_path, 'a+') as view_file:
                         csv_writer = csv.writer(view_file)
                         data_row = [nrrd_path, time_idx, struct_idx, i, j, k]
                         csv_writer.writerow(data_row)

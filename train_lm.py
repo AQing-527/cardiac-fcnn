@@ -7,7 +7,9 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from dataset import EchoData
-from models.fcnn import FCNN
+from models.scn import SCN
+from criterion.adaptive_wing_loss import AdaptiveWingLoss
+from criterion.weighted_loss import WeightedAdaptiveWingLoss
 import utils
 
 
@@ -15,7 +17,8 @@ class Trainer(object):
     def __init__(self, config):
         self.init_time = utils.current_time()
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.struct = config['struct']
+        self.view = config['view']
+        self.structs = torch.IntTensor(sorted(utils.VIEW_STRUCTS[self.view]))
         self.print_interval = config['print_interval']
         self.save_interval = config['save_interval']
         self.log_interval = config['log_interval']
@@ -33,8 +36,10 @@ class Trainer(object):
         console_file = open(self.console_path, 'w')
         console_file.close()
 
-        self.train_data = EchoData(config['train_meta_path'])
-        self.val_data = EchoData(config['val_meta_path'])
+        self.train_data = EchoData(
+            config['train_meta_path'], norm_echo=True, norm_truth=True, augmentation=True)
+        self.val_data = EchoData(
+            config['val_meta_path'], norm_echo=True, norm_truth=True, augmentation=False)
 
         self.train_loader = DataLoader(
             self.train_data, batch_size=config['batch_size'], shuffle=True, drop_last=False, num_workers=8)
@@ -42,12 +47,18 @@ class Trainer(object):
             self.val_data, batch_size=config['batch_size'], shuffle=False, drop_last=False, num_workers=8)
 
         self.epochs = config['epochs']
-        self.model = FCNN().to(self.device)
-        self.loss_fn1 = nn.L1Loss().to(self.device)
-        self.loss_fn2 = nn.BCELoss().to(self.device)
-        
+        self.model = SCN(1, len(self.structs), filters=128,
+                         factor=4, dropout=0.5).to(self.device)
+        self.loss_fn = WeightedAdaptiveWingLoss(reduction='sum').to(self.device)
+        # self.loss_fn = AdaptiveWingLoss(reduction='sum').to(self.device)
+        # self.loss_fn = nn.MSELoss(reduction='sum').to(self.device)
+        # self.loss_fn = nn.L1Loss(reduction='sum').to(self.device)
+        # self.loss_fn = nn.SmoothL1Loss(reduction='sum', beta=1.0).to(self.device)
+        # self.optimizer = optim.SGD(self.model.parameters(
+        # ), lr=config['lr'], momentum=0.99, nesterov=True, weight_decay=config['weight_decay'])
         self.optimizer = optim.AdamW(self.model.parameters(
         ), lr=config['lr'], weight_decay=config['weight_decay'])
+        # self.optimizer = optim.Adam(self.model.parameters(), lr=config['lr'])
 
         self.total_train_step = 0
         self.total_val_step = 0
@@ -62,19 +73,19 @@ class Trainer(object):
         size = len(self.train_loader.dataset)
         train_loss = 0
 
-        for batch, (echo, displacement_vector, classifier) in enumerate(self.train_loader):
-            echo = echo.to(self.device)
+        for batch, (echo, truth, structs, _) in enumerate(self.train_loader):
+            echo, truth = echo.to(self.device), truth.to(self.device)
             pred = self.model(echo)[0]
-            pred_displacement = pred[0]
-            pred_classifier = pred[1]
-            loss = self.loss_fn1(pred_displacement, displacement_vector) + self.loss_fn2(pred_classifier, classifier)
+            loss = self.criterion(pred, truth, structs)
+            loss /= (truth.shape[0]*truth.shape[1])
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            train_loss += loss.item()
+            train_loss += len(echo)*loss.item()
             if batch % self.print_interval == 0:
-                self.print(f'train: {loss.item():.9e}')
+                loss_val, curr = loss.item(), batch*len(echo)
+                self.print(f'train: {loss_val:.9e} [{curr:>3d}/{size:>3d}]')
 
             self.total_train_step += 1
             if self.total_train_step % self.log_interval == 0:
@@ -92,16 +103,16 @@ class Trainer(object):
         val_loss = 0.0
 
         with torch.no_grad():
-            for batch, (echo, displacement_vector, classifier) in enumerate(self.val_loader):
-                echo = echo.to(self.device)
+            for batch, (echo, truth, structs, _) in enumerate(self.val_loader):
+                echo, truth = echo.to(self.device), truth.to(self.device)
                 pred = self.model(echo)[0]
-                pred_displacement = pred[0]
-                pred_classifier = pred[1]
-                loss = self.loss_fn1(pred_displacement, displacement_vector) + self.loss_fn2(pred_classifier, classifier)
-                val_loss += loss.item()
+                loss = self.criterion(pred, truth, structs)
+                loss /= (truth.shape[0]*truth.shape[1])
+                val_loss += len(echo)*loss.item()
 
                 if batch % self.print_interval == 0:
-                    self.print(f'valid: {val_loss.item():.9e}')
+                    loss_val, curr = loss.item(), batch*len(echo)
+                    self.print(f'valid: {loss_val:.9e} [{curr:>3d}/{size:>3d}]')
 
         val_loss /= size
         self.end_time = time.time()
@@ -114,6 +125,22 @@ class Trainer(object):
                 'validation loss', val_loss, self.total_val_step)
 
         return val_loss
+
+    def criterion(self, pred, truth, structs):
+        loss = 0.0
+        for i in range(len(pred)):
+            if len(structs[i]) == len(self.structs):
+                loss += self.loss_fn(pred[i], truth[i])
+            else:
+                diff = list(set(self.structs).difference(set(structs[i])))
+                diff_idx = [
+                    utils.VIEW_STRUCTS[self.view].index(_) for _ in diff]
+                pred_i, truth_i = pred[i], truth[i]
+                for j in diff_idx:
+                    pred_i = utils.del_tensor_ele(pred_i, j)
+                    truth_i = utils.del_tensor_ele(truth_i, j)
+                loss += self.loss_fn(pred_i, truth_i)
+        return loss
 
     def start(self):
         self.print(f'Training on {self.device}...')
@@ -157,7 +184,7 @@ class Trainer(object):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Cardiac FCNN Trainer')
+    parser = argparse.ArgumentParser(description='Cardiac SCN Trainer')
     parser.add_argument(
         '--config', type=str, default='configs/default.json', help='configuration path')
     args = parser.parse_args()

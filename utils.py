@@ -79,6 +79,12 @@ def get_view_index(name, type='abbr'):
         return VIEWS_ABBR.index(name)
 
 
+def get_view_name_by_struct_id(struct_idx):
+    for key in VIEW_STRUCTS:
+        if struct_idx in VIEW_STRUCTS[key]:
+            return key
+
+
 def draw(data, filename, mode='clip'):
     if mode == 'clip':
         data[data < 0.0] = 0.0

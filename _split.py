@@ -4,10 +4,9 @@ import numpy as np
 
 CLEANUP_EXIST = True
 
-all_dir = 'data/meta/3d_truth'
+all_dir = 'data/meta/3d_ijk'
 test_meta_path = 'data/meta/test/_TEST.txt'
-# views = ['A2C', 'A4C', 'SAXA', 'SAXB', 'ALAX', 'SAXMV', 'SAXM']
-views = ['A2C']
+structs = ['0']
 train_dir = 'data/meta/train'
 val_dir = 'data/meta/val'
 test_dir = 'data/meta/test'
@@ -19,48 +18,64 @@ if __name__ == '__main__':
         for line in file:
             test_filenames.add(line.strip('\n'))
 
-    for view in views:
-        all_view_dir = os.path.join(all_dir, view)
-        train_view_dir = os.path.join(train_dir, view)
-        val_view_dir = os.path.join(val_dir, view)
-        test_view_dir = os.path.join(test_dir, view)
-        os.makedirs(train_view_dir, exist_ok=True)
-        os.makedirs(val_view_dir, exist_ok=True)
-        os.makedirs(test_view_dir, exist_ok=True)
+    for struct in structs:
+        all_struct_dir = os.path.join(all_dir, struct)
+        train_struct_dir = os.path.join(train_dir, struct)
+        val_struct_dir = os.path.join(val_dir, struct)
+        test_struct_dir = os.path.join(test_dir, struct)
+        os.makedirs(train_struct_dir, exist_ok=True)
+        os.makedirs(val_struct_dir, exist_ok=True)
+        os.makedirs(test_struct_dir, exist_ok=True)
         if CLEANUP_EXIST:
-            os.system(f'rm -rf {train_view_dir}/*')
-            os.system(f'rm -rf {val_view_dir}/*')
-            os.system(f'rm -rf {test_view_dir}/*')
+            os.system(f'rm -rf {train_struct_dir}/*')
+            os.system(f'rm -rf {val_struct_dir}/*')
+            os.system(f'rm -rf {test_struct_dir}/*')
 
-        # train : val : test = 64 : 16 : 20
-        all_meta = sorted([i for i in os.listdir(all_view_dir) if '.csv' in i])
-        test_meta = [i for i in all_meta if os.path.splitext(i)[
-            0] in test_filenames]
-        train_val_meta = [i for i in all_meta if os.path.splitext(i)[
-            0] not in test_filenames]
+        csv_reader = csv.reader(open(os.path.join(all_struct_dir, 'metadata.csv'), 'r'))
+        csv_mat = []
+        for row in csv_reader:
+            if csv_reader.line_num == 1:
+                continue
+            csv_mat.append(row)
+
+        test_meta = []
+        train_val_meta = []
+        for i in range(len(csv_mat)):
+            nrrd = csv_mat[i][0].split('/')[-1][4:-11]
+            if nrrd in test_filenames:
+                test_meta.append(csv_mat[i])
+            else:
+                train_val_meta.append(csv_mat[i])
+        print(len(test_meta))
         np.random.seed(4801)
         shuffled_meta = np.random.permutation(train_val_meta)
         train_meta = shuffled_meta[:8 * len(shuffled_meta) // 10]
         val_meta = shuffled_meta[8 * len(shuffled_meta) // 10:]
+        print(len(train_meta))
+        print(len(val_meta))
 
         # Record filenames
-        with open(os.path.join(train_view_dir, f'_{view}_TRAIN.txt'), 'w') as file:
-            for m in train_meta:
-                file.write(os.path.splitext(m)[0]+'\n')
-        with open(os.path.join(val_view_dir, f'_{view}_VAL.txt'), 'w') as file:
-            for m in val_meta:
-                file.write(os.path.splitext(m)[0]+'\n')
-        with open(os.path.join(test_view_dir, f'_{view}_TEST.txt'), 'w') as file:
-            for m in test_meta:
-                file.write(os.path.splitext(m)[0]+'\n')
+        train_meta_save_path = os.path.join(train_struct_dir, 'metadata.csv')
+        val_meta_save_path = os.path.join(val_struct_dir, 'metadata.csv')
+        test_meta_save_path = os.path.join(test_struct_dir, 'metadata.csv')
+        with open(train_meta_save_path, 'w') as meta_file:
+            csv_writer = csv.writer(meta_file)
+            csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
+            csv_writer.writerow(csv_head)
+            for row in train_meta:
+                csv_writer.writerow(row)
+        
+        with open(val_meta_save_path, 'w') as meta_file:
+            csv_writer = csv.writer(meta_file)
+            csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
+            csv_writer.writerow(csv_head)
+            for row in train_meta:
+                csv_writer.writerow(row)
 
-        # Copy meta
-        for m in train_meta:
-            os.system(f'cp {os.path.join(all_view_dir, m)} {train_view_dir}')
-            print(f'{view} Train {m}')
-        for m in val_meta:
-            os.system(f'cp {os.path.join(all_view_dir, m)} {val_view_dir}')
-            print(f'{view} Val {m}')
-        for m in test_meta:
-            os.system(f'cp {os.path.join(all_view_dir, m)} {test_view_dir}')
-            print(f'{view} Test {m}')
+        with open(train_meta_save_path, 'w') as meta_file:
+            csv_writer = csv.writer(meta_file)
+            csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
+            csv_writer.writerow(csv_head)
+            for row in train_meta:
+                csv_writer.writerow(row)
+            

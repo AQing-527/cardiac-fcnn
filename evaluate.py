@@ -5,13 +5,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from dataset import EchoData
-from models.scn import SCN
+from models.fcnn import FCNN
 import utils
 
-pth_path = 'pths/debug/2023-01-04-18-58-05/21-best.pth'
-meta_dir = 'data/meta/val/A2C'
-ijk_dir = 'data/meta/3d_ijk/A2C'
-structs = [0, 5, 25]
+pth_path = 'pths/default/2023-01-22-09-21-50/98-best.pth'
+meta_dir = 'data/meta/test/0'
 
 save_dir = 'res'
 
@@ -29,59 +27,64 @@ if __name__ == '__main__':
     open(save_path, 'w').close()
     save_txt(f'pth_path: {pth_path}', save_path)
     save_txt(f'meta_dir: {meta_dir}', save_path)
-    save_txt(f'ijk_dir: {ijk_dir}', save_path)
     save_txt('', save_path)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    dataset = EchoData(meta_dir, norm_echo=True,
-                       norm_truth=True, augmentation=False)
-    loader = DataLoader(dataset, batch_size=1, shuffle=False,
-                        drop_last=False, num_workers=4)
+    dataset = EchoData(meta_dir, norm_echo=False, augmentation=False)
+    loader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False, num_workers=4)
 
-    model = SCN(1, len(structs), filters=128, factor=4, dropout=0.5).to(device)
+    model = FCNN().to(device)
     model.load_state_dict(torch.load(
         pth_path, map_location=torch.device(device)))
     model.eval()
 
+    centers = []
+    for x in range(2):
+        for y in range(2):
+                for z in range(2):
+                    centers.append([(32 + 64 * x), (32 + 64 * y), (32 + 64 * z)])
+    centers = np.array(centers, dtype=float)
+
     dists = []
     size = len(loader)
     with torch.no_grad():
-        for batch, (echo, truth, struct, filename) in enumerate(loader):
-            echo, truth = echo.to(device), truth.to(device)
-            pred = model(echo)[0][0]
-
-            pred_xyz = {}
-            for i, channel in enumerate(pred):
-                a, b, c = channel.shape
-                index = torch.argmax(channel).item()
-                x, y, z = index//(b*c), (index % (b*c))//c, (index % (b*c)) % c
-                pred_xyz[structs[i]] = (float(x), float(y), float(z))
-
-            truth_xyz = {}
-            file_path = os.path.join(ijk_dir, filename[0]+'.csv')
-            reader = csv.reader(open(file_path, 'r'))
-            for row in reader:
-                if reader.line_num == 1:
-                    continue
-                truth_xyz[int(row[1])] = (
-                    float(row[2]), float(row[3]), float(row[4]))
-
-            dist = 0.0
+        for batch, (filename, echo, displacement_vector, classifier) in enumerate(loader):
+            echo, displacement_vector, classifier = echo.to(device), displacement_vector.to(device), classifier.to(device)
+            pred = model(echo)
+            pred_displacement = pred[0]
+            pred_classifier = pred[1]
+            pred_displacement = np.array(pred_displacement.cpu())
+            pred_classifier = np.array(pred_classifier.cpu())
+            displacement_vector = np.array(displacement_vector.cpu())
+            save_txt(pred_displacement, save_path)
+            save_txt(pred_classifier, save_path)
+            save_txt(displacement_vector, save_path)
+            save_txt(classifier, save_path)
             num = 0
-            for st in structs:
-                if truth_xyz.get(st):
+            largest_classifier_idx = 0
+            pred_landmark = np.array([0,0,0], dtype=float)
+            for i in range(len(pred_classifier)):
+                if pred_classifier[i][0]>=0:
                     num += 1
-                    t_xyz = np.array(truth_xyz[st])
-                    p_xyz = np.array(pred_xyz[st])
-                    dist += np.sqrt(np.sum((t_xyz-p_xyz)**2))
-            dist /= num
+                    pred_landmark += (centers[i] + pred_displacement[i])
+                if pred_classifier[i][0]>pred_classifier[largest_classifier_idx][0]:
+                    largest_classifier_idx = i
+            print(num)
+            if (num>0):
+                pred_landmark = pred_landmark / num
+            else:
+                pred_landmark = centers[largest_classifier_idx] + pred_displacement[largest_classifier_idx]
+            landmark = centers[0] + displacement_vector[0]
+            dist = np.sqrt(np.sum((pred_landmark-landmark)**2))
+            
             dists.append(dist)
             save_txt(f'[{batch:>3d}/{size:>3d}] {filename[0]} {dist}', save_path)
-            save_txt(truth_xyz, save_path)
-            save_txt(pred_xyz, save_path)
+            save_txt(landmark, save_path)
+            save_txt(pred_landmark, save_path)
             save_txt('', save_path)
 
             print(f'[{batch:>3d}/{size:>3d}] {dist}')
+    
     dists = np.array(dists)
     save_txt(f'[median] {np.median(dists)}', save_path)
     print(f'[median] {np.median(dists)}')
@@ -89,3 +92,6 @@ if __name__ == '__main__':
     print(f'[mean] {dists.mean()}')
     save_txt(f'[std] {dists.std()}', save_path)
     print(f'[std] {dists.std()}')
+    print(f'[median] in mm {np.median(dists)*1.25}')
+    print(f'[mean] in mm {dists.mean()*1.25}')
+    print(f'[std] in mm {dists.std()*1.25}')

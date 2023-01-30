@@ -33,8 +33,8 @@ class Trainer(object):
         console_file = open(self.console_path, 'w')
         console_file.close()
 
-        self.train_data = EchoData(config['train_meta_path'])
-        self.val_data = EchoData(config['val_meta_path'])
+        self.train_data = EchoData(config['train_meta_path'], norm_echo=True, augmentation=True)
+        self.val_data = EchoData(config['val_meta_path'], norm_echo=True, augmentation=False)
 
         self.train_loader = DataLoader(
             self.train_data, batch_size=config['batch_size'], shuffle=True, drop_last=False, num_workers=8)
@@ -62,19 +62,22 @@ class Trainer(object):
         size = len(self.train_loader.dataset)
         train_loss = 0
 
-        for batch, (echo, displacement_vector, classifier) in enumerate(self.train_loader):
-            echo = echo.to(self.device)
-            pred = self.model(echo)[0]
+        for batch, (filename, echo, displacement_vector, classifier) in enumerate(self.train_loader):
+            classifier = classifier.reshape(-1,1)
+            echo, displacement_vector, classifier = echo.to(self.device), displacement_vector.to(self.device), classifier.to(self.device)
+            pred = self.model(echo)
             pred_displacement = pred[0]
             pred_classifier = pred[1]
             loss = self.loss_fn1(pred_displacement, displacement_vector) + self.loss_fn2(pred_classifier, classifier)
+            loss /= len(echo)
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            train_loss += loss.item()
+            train_loss += loss.item() * len(echo)
             if batch % self.print_interval == 0:
-                self.print(f'train: {loss.item():.9e}')
+                loss_value, curr = loss.item(), batch*len(echo)
+                self.print(f'train: {loss_value:.9e} [{curr:>3d}/{size:>3d}]')
 
             self.total_train_step += 1
             if self.total_train_step % self.log_interval == 0:
@@ -92,16 +95,19 @@ class Trainer(object):
         val_loss = 0.0
 
         with torch.no_grad():
-            for batch, (echo, displacement_vector, classifier) in enumerate(self.val_loader):
-                echo = echo.to(self.device)
-                pred = self.model(echo)[0]
+            for batch, (filename, echo, displacement_vector, classifier) in enumerate(self.val_loader):
+                classifier = classifier.reshape(-1,1)
+                echo, displacement_vector, classifier = echo.to(self.device), displacement_vector.to(self.device), classifier.to(self.device)
+                pred = self.model(echo)
                 pred_displacement = pred[0]
                 pred_classifier = pred[1]
                 loss = self.loss_fn1(pred_displacement, displacement_vector) + self.loss_fn2(pred_classifier, classifier)
-                val_loss += loss.item()
+                loss /= len(echo)
+                val_loss += loss.item() * len(echo)
 
                 if batch % self.print_interval == 0:
-                    self.print(f'valid: {val_loss.item():.9e}')
+                    loss_value, curr = loss.item(), batch*len(echo)
+                    self.print(f'valid: {loss_value:.9e} [{curr:>3d}/{size:>3d}]')
 
         val_loss /= size
         self.end_time = time.time()

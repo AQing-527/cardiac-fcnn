@@ -69,13 +69,13 @@ if __name__ == '__main__':
             csv_writer = csv.writer(meta_file)
             csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
             csv_writer.writerow(csv_head)
-            for row in train_meta:
+            for row in val_meta:
                 csv_writer.writerow(row)
 
-        with open(train_meta_save_path, 'w') as meta_file:
+        with open(test_meta_save_path, 'w') as meta_file:
             csv_writer = csv.writer(meta_file)
             csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
             csv_writer.writerow(csv_head)
-            for row in train_meta:
+            for row in test_meta:
                 csv_writer.writerow(row)
             

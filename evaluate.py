@@ -8,7 +8,7 @@ from dataset import EchoData
 from models.fcnn import FCNN
 import utils
 
-pth_path = 'pths/default/2023-01-22-09-21-50/98-best.pth'
+pth_path = 'pths/default/2023-01-31-10-10-28/96-best.pth'
 meta_dir = 'data/meta/test/0'
 
 save_dir = 'res'
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     save_txt('', save_path)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    dataset = EchoData(meta_dir, norm_echo=False, augmentation=False)
+    dataset = EchoData(meta_dir, norm_echo=True, augmentation=False)
     loader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False, num_workers=4)
 
     model = FCNN().to(device)

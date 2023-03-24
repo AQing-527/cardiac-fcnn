@@ -1,6 +1,6 @@
 import os
-import argparse
 import csv
+import argparse
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -8,34 +8,50 @@ from dataset import EchoData
 from models.fcnn import FCNN
 import utils
 
-pth_path = 'pths/default/2023-01-31-10-10-28/96-best.pth'
-meta_dir = 'data/meta/test/0'
-
-save_dir = 'res'
-
-
-def save_txt(text, file):
-    f = open(file, 'a+')
-    f.write(str(text)+'\n')
-    f.close()
-
 
 if __name__ == '__main__':
+    threshold = 0.5
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--struct', type=str, default='25', help='struct id')
+    parser.add_argument('--dataset', type=str, default='test', help='test')
+    parser.add_argument('--pth_path', type=str, default='pths/25/transfer/200.pth',
+                        help='pth path')
+    parser.add_argument('--model_key', type=str,
+                        default='model_state_dict', help='model key')
+    args = parser.parse_args()
+    struct = args.struct
+    dataset = args.dataset
+    pth_path = args.pth_path
+    model_key = args.model_key
+    meta_dir = f'data/meta/{dataset}/{struct}'
+    # ijk_dir = f'data/meta/3d_ijk/{view}'
+    save_dir = f'evaluation/{struct}'
+    view = utils.get_view_name_by_struct_id(int(struct))
+    ratios = utils.read_ratio(f'data/meta/size/{view}.csv')
+
     time = utils.current_time()
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, time+'.txt')
-    open(save_path, 'w').close()
-    save_txt(f'pth_path: {pth_path}', save_path)
-    save_txt(f'meta_dir: {meta_dir}', save_path)
-    save_txt('', save_path)
+    save_path = os.path.join(save_dir, time+'.csv')
+    with open(save_path, 'w') as file:
+        writer = csv.writer(file)
+        header = ['name', 'truth_x', 'truth_y', 'truth_z',
+                  'pred_x', 'pred_y', 'pred_z', 'euclidean_distance', 'real_distance', 'ratio']
+        writer.writerow(header)
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     dataset = EchoData(meta_dir, norm_echo=True, augmentation=False)
-    loader = DataLoader(dataset, batch_size=8, shuffle=False, drop_last=False, num_workers=4)
+    loader = DataLoader(dataset, batch_size=8, shuffle=False,
+                        drop_last=False, num_workers=4)
 
     model = FCNN().to(device)
-    model.load_state_dict(torch.load(
-        pth_path, map_location=torch.device(device)))
+    if model_key is None or model_key == '':
+        model.load_state_dict(torch.load(
+            pth_path, map_location=torch.device(device)))
+    else:
+        checkpoint = torch.load(pth_path, map_location=torch.device(device))
+        model.load_state_dict(checkpoint[model_key])
     model.eval()
 
     centers = []
@@ -46,6 +62,7 @@ if __name__ == '__main__':
     centers = np.array(centers, dtype=float)
 
     dists = []
+    real_dists = []
     size = len(loader)
     with torch.no_grad():
         for batch, (filename, echo, displacement_vector, classifier) in enumerate(loader):
@@ -56,15 +73,11 @@ if __name__ == '__main__':
             pred_displacement = np.array(pred_displacement.cpu())
             pred_classifier = np.array(pred_classifier.cpu())
             displacement_vector = np.array(displacement_vector.cpu())
-            save_txt(pred_displacement, save_path)
-            save_txt(pred_classifier, save_path)
-            save_txt(displacement_vector, save_path)
-            save_txt(classifier, save_path)
             num = 0
             largest_classifier_idx = 0
             pred_landmark = np.array([0,0,0], dtype=float)
             for i in range(len(pred_classifier)):
-                if pred_classifier[i][0]>=0:
+                if pred_classifier[i][0]>=threshold:
                     num += 1
                     pred_landmark += (centers[i] + pred_displacement[i])
                 if pred_classifier[i][0]>pred_classifier[largest_classifier_idx][0]:
@@ -74,24 +87,39 @@ if __name__ == '__main__':
                 pred_landmark = pred_landmark / num
             else:
                 pred_landmark = centers[largest_classifier_idx] + pred_displacement[largest_classifier_idx]
-            landmark = centers[0] + displacement_vector[0]
-            dist = np.sqrt(np.sum((pred_landmark-landmark)**2))
             
-            dists.append(dist)
-            save_txt(f'[{batch:>3d}/{size:>3d}] {filename[0]} {dist}', save_path)
-            save_txt(landmark, save_path)
-            save_txt(pred_landmark, save_path)
-            save_txt('', save_path)
-
-            print(f'[{batch:>3d}/{size:>3d}] {dist}')
+            landmark = centers[0] + displacement_vector[0]
     
+            # dists = np.array(dists)
+
+            with open(save_path, 'a+') as file:
+                writer = csv.writer(file)
+                print(f'[{batch:>3d}/{size:>3d}]', end=' ')
+                ratio = ratios.get(filename[0])
+
+                row = [f'{filename[0]}']
+                row.extend(landmark)
+
+                dist = np.sqrt(np.sum((pred_landmark-landmark)**2)).item()
+                real_dist = dist/ratio
+                dists.append(dist)
+                real_dists.append(real_dist)
+
+                row.extend(pred_landmark)
+                row.extend([dist, real_dist, ratio])
+                writer.writerow(row)
+                print(dist)
+
     dists = np.array(dists)
-    save_txt(f'[median] {np.median(dists)}', save_path)
-    print(f'[median] {np.median(dists)}')
-    save_txt(f'[mean] {dists.mean()}', save_path)
-    print(f'[mean] {dists.mean()}')
-    save_txt(f'[std] {dists.std()}', save_path)
-    print(f'[std] {dists.std()}')
-    print(f'[median] in mm {np.median(dists)*1.25}')
-    print(f'[mean] in mm {dists.mean()*1.25}')
-    print(f'[std] in mm {dists.std()*1.25}')
+    real_dists = np.array(real_dists)
+    with open(save_path, 'a+') as file:
+        writer = csv.writer(file)
+        writer.writerow(['[median]', '', '', '', '', '', '',
+                        np.median(dists), np.median(real_dists), ''])
+        writer.writerow(['[mean]', '', '', '', '', '', '',
+                        dists.mean(), real_dists.mean(), ''])
+        writer.writerow(['[std]', '', '', '', '', '', '',
+                        dists.std(), real_dists.std(), ''])
+    print(f'[median] {np.median(dists)} {np.median(real_dists)}')
+    print(f'[mean] {dists.mean()} {real_dists.mean()}')
+    print(f'[std] {dists.std()} {real_dists.std()}')

@@ -64,12 +64,12 @@ class Trainer(object):
         
         self.optimizer = optim.AdamW(self.model.parameters(
         ), lr=config['lr'], weight_decay=config['weight_decay'], amsgrad=True)
-        if self.resume:
-            self.optimizer.load_state_dict(self.ckpt['optimizer_state_dict'])
-        self.lr_scheduler = optim.lr_scheduler.StepLR(self.optimizer, 30, 0.1)
-        if self.resume:
-            self.lr_scheduler.load_state_dict(
-                self.ckpt['lr_scheduler_state_dict'])
+        # if self.resume:
+        #     self.optimizer.load_state_dict(self.ckpt['optimizer_state_dict'])
+        self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=config['factor'], patience=config['patience'])
+        # if self.resume:
+        #     self.lr_scheduler.load_state_dict(
+        #         self.ckpt['lr_scheduler_state_dict'])
         self.total_train_step = 0
         self.total_val_step = 0
         self.start_time = 0.0
@@ -79,7 +79,7 @@ class Trainer(object):
         if self.resume:
             self.total_train_step = self.ckpt['total_train_step']
             self.total_val_step = self.ckpt['total_val_step']
-            self.last_val_loss = self.ckpt['last_val_loss']
+            # self.last_val_loss = self.ckpt['last_val_loss']
             self.best_epoch = self.ckpt['best_epoch']
 
     def train(self):
@@ -153,8 +153,9 @@ class Trainer(object):
         start_epoch = 0
         if self.resume:
             start_epoch = self.ckpt['epoch']
+            start_lr = self.optimizer.state_dict()['param_groups'][0]['lr']
             self.print(
-                f'Resume training from epoch {start_epoch+1} with LR={self.lr_scheduler.get_last_lr()}...')
+                f'Resume training from epoch {start_epoch+1} with LR={start_lr}...')
 
         for t in range(start_epoch, self.epochs):
             self.print('')
@@ -163,7 +164,9 @@ class Trainer(object):
 
             self.train()
             val_loss = self.eval()
-            self.lr_scheduler.step()
+            self.lr_scheduler.step(val_loss)
+            self.logger.add_scalar(
+                    'learning rate', self.optimizer.state_dict()['param_groups'][0]['lr'], t)
 
             if (t+1) % self.save_interval == 0:
                 pth_file_path = os.path.join(self.pth_path, f'{str(t+1)}.pth')
@@ -214,10 +217,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Cardiac FCNN Trainer')
     parser.add_argument(
         '--config', type=str, 
-        default='configs/default.json', 
+        default='configs/reduceLROnPlateau.json', 
         help='configuration path')
     parser.add_argument('--ckpt', type=str,
-                        default=None, 
+                        default='pths/0/Plateau-0.5-10_2023-03-22-11-20-23/100.pth', 
                         help='resume checkpoint path')
     args = parser.parse_args()
     trainer = Trainer(utils.load_config(args.config), ckpt_path=args.ckpt)

@@ -4,6 +4,7 @@ from datetime import datetime
 from PIL import Image
 import torch
 import numpy as np
+import csv
 
 STRUCTS = ['A2C-LV apex', 'A4C-LV apex', 'A4C-TV tip', 'ALAX-LV apex', 'Anterior mitral annulus', 'Anterolateral mitral annulus',
            'Anterolateral papillary muscle', 'Aortic annulus', 'Center of AV', 'IAS', 'IVS', 'IW', 'Interventricular septum',
@@ -93,3 +94,13 @@ def draw(data, filename, mode='clip'):
                 * 255.9).astype(np.uint8)
     image = Image.fromarray(int_data)
     image.save(filename)
+
+def read_ratio(path):
+    ratios = {}
+    with open(path, 'r') as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if reader.line_num == 1:
+                continue
+            ratios[row[0]] = float(row[3])
+    return ratios

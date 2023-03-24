@@ -1,0 +1,16 @@
+{
+    "struct": "0",
+    "pth_path": "pths/default",
+    "log_path": "logs/default",
+    "train_meta_path": "data/meta/train/0",
+    "val_meta_path": "data/meta/val/0",
+    "epochs": 100,
+    "batch_size": 64,
+    "lr": 1e-4,
+    "weight_decay": 5e-4,
+    "lr_step_size": 30,
+    "lr_step_gamma": 0.5,
+    "print_interval": 1,
+    "save_interval": 20,
+    "log_interval": 1
+}

@@ -6,10 +6,18 @@ CLEANUP_EXIST = True
 
 all_dir = 'data/meta/3d_ijk'
 test_meta_path = 'data/meta/test/_TEST.txt'
-structs = ['0']
-train_dir = 'data/meta/train'
-val_dir = 'data/meta/val'
-test_dir = 'data/meta/test'
+structs = ['2']
+
+log_transformed = False
+
+if log_transformed:
+    train_dir = 'data/meta/log_transformed/train'
+    val_dir = 'data/meta/log_transformed/val'
+    test_dir = 'data/meta/log_transformed/test'
+else:
+    train_dir = 'data/meta/train'
+    val_dir = 'data/meta/val'
+    test_dir = 'data/meta/test'
 
 if __name__ == '__main__':
     # Read predetermined test data
@@ -63,19 +71,58 @@ if __name__ == '__main__':
             csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
             csv_writer.writerow(csv_head)
             for row in train_meta:
-                csv_writer.writerow(row)
+                if log_transformed:
+                    new_row = []
+                    new_row.append(row[0])
+                    for i in range(1,4):
+                        if float(row[i])>=0:
+                            log_num = np.log(float(row[i])+1)
+                            new_row.append(log_num)
+                        else:
+                            log_num = -1 * np.log((-1*float(row[i]))+1)
+                            new_row.append(log_num)
+                    new_row.append(row[4])
+                    csv_writer.writerow(new_row)
+                else:
+                    csv_writer.writerow(row)
         
         with open(val_meta_save_path, 'w') as meta_file:
             csv_writer = csv.writer(meta_file)
             csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
             csv_writer.writerow(csv_head)
             for row in val_meta:
-                csv_writer.writerow(row)
+                if log_transformed:
+                    new_row = []
+                    new_row.append(row[0])
+                    for i in range(1,4):
+                        if float(row[i])>=0:
+                            log_num = np.log(float(row[i])+1)
+                            new_row.append(log_num)
+                        else:
+                            log_num = -1 * np.log((-1*float(row[i]))+1)
+                            new_row.append(log_num)
+                    new_row.append(row[4])
+                    csv_writer.writerow(new_row)
+                else:
+                    csv_writer.writerow(row)
 
         with open(test_meta_save_path, 'w') as meta_file:
             csv_writer = csv.writer(meta_file)
             csv_head = ['nrrd_patch_path', 'displacement_i', 'displacement_j', 'displacement_k', 'classifier']
             csv_writer.writerow(csv_head)
             for row in test_meta:
-                csv_writer.writerow(row)
+                if log_transformed:
+                    new_row = []
+                    new_row.append(row[0])
+                    for i in range(1,4):
+                        if float(row[i])>=0:
+                            log_num = np.log(float(row[i])+1)
+                            new_row.append(log_num)
+                        else:
+                            log_num = -1 * np.log((-1*float(row[i]))+1)
+                            new_row.append(log_num)
+                    new_row.append(row[4])
+                    csv_writer.writerow(new_row)
+                else:
+                    csv_writer.writerow(row)
             

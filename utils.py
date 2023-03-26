@@ -1,10 +1,10 @@
 import json
 import os
+import math
+import csv
 from datetime import datetime
 from PIL import Image
-import torch
 import numpy as np
-import csv
 
 STRUCTS = ['A2C-LV apex', 'A4C-LV apex', 'A4C-TV tip', 'ALAX-LV apex', 'Anterior mitral annulus', 'Anterolateral mitral annulus',
            'Anterolateral papillary muscle', 'Aortic annulus', 'Center of AV', 'IAS', 'IVS', 'IW', 'Interventricular septum',
@@ -104,3 +104,39 @@ def read_ratio(path):
                 continue
             ratios[row[0]] = float(row[3])
     return ratios
+
+def fit_plane(xyz):
+    centroid = xyz.mean(axis=0)
+    xyzR = xyz - centroid
+    u, sigma, v = np.linalg.svd(xyzR)
+    normal = v[2]
+    if normal[2] < 0.0:
+        normal = -normal
+    normal = normal / np.linalg.norm(normal)
+    return (centroid, normal)
+
+def unit_vector(vector):
+    return vector / np.linalg.norm(vector)
+
+
+def angle_between(v1, v2, directed=False):
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    angle = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))/math.pi*180
+    if not directed and angle > 90.0:
+        angle = 180.0-angle
+    return angle
+
+
+def distance_along_direction(x, y, u):
+    xy = y-x
+    u = unit_vector(u)
+    d = np.dot(xy, u)*u
+    return np.linalg.norm(d)
+
+
+def distance_to_plane(points, centroid, normal):
+    n = unit_vector(normal)
+    v = points-centroid
+    d = np.abs(v@n.T)
+    return d

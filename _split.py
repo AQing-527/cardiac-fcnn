@@ -6,7 +6,7 @@ CLEANUP_EXIST = True
 
 all_dir = 'data/meta/3d_ijk'
 test_meta_path = 'data/meta/test/_TEST.txt'
-structs = ['2']
+structs = ['20']
 
 log_transformed = False
 
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         test_meta = []
         train_val_meta = []
         for i in range(len(csv_mat)):
-            nrrd = csv_mat[i][0].split('/')[-1][4:-11]
+            nrrd = csv_mat[i][0].split('/')[-1][6:-11]
             if nrrd in test_filenames:
                 test_meta.append(csv_mat[i])
             else:

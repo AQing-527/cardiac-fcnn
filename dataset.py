@@ -28,7 +28,7 @@ class EchoData(Dataset):
 
     def __getitem__(self, index):
         meta = self.metas[index]
-        nrrd_filename = meta[0].split('/')[-1][4:-11]
+        nrrd_filename = meta[0].split('/')[-1][6:-11]
         echo_data = nrrd.read(meta[0])[0]  # np.uint8
         
         if self.augmentation:

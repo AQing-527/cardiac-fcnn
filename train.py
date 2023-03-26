@@ -33,8 +33,8 @@ class Trainer(object):
         self.save_interval = config['save_interval']
         self.log_interval = config['log_interval']
 
-        self.pth_path = os.path.join(config['pth_path'], self.init_time)
-        self.log_path = os.path.join(config['log_path'], self.init_time)
+        self.pth_path = os.path.join(f'pths/{self.struct}', 'transfer')
+        self.log_path = os.path.join(f'logs/{self.struct}', 'transfer')
         os.makedirs(self.pth_path, exist_ok=True)
         os.makedirs(self.log_path, exist_ok=True)
         self.logger = SummaryWriter(self.log_path)
@@ -47,8 +47,8 @@ class Trainer(object):
             console_file = open(self.console_path, 'w')
             console_file.close()
 
-        self.train_data = EchoData(config['train_meta_path'], norm_echo=True, augmentation=False)
-        self.val_data = EchoData(config['val_meta_path'], norm_echo=True, augmentation=False)
+        self.train_data = EchoData(f'data/meta/train/{self.struct}', norm_echo=True, augmentation=False)
+        self.val_data = EchoData(f'data/meta/val/{self.struct}', norm_echo=True, augmentation=False)
 
         self.train_loader = DataLoader(
             self.train_data, batch_size=config['batch_size'], shuffle=True, drop_last=False, num_workers=8)

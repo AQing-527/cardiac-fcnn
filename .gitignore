@@ -131,13 +131,14 @@ dmypy.json
 # Custom
 .vscode/
 data/
+evaluation/
 nrrd/
 dev/
 logs/
 pths/
 res/
 images/
-evaluation/
+results/
 *.pth
 *.nrrd
 events.*

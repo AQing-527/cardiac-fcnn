@@ -10,12 +10,13 @@ import utils
 
 
 if __name__ == '__main__':
-    threshold = 0.5
+    threshold = 0.6
+    log_transformed = False
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--struct', type=str, default='25', help='struct id')
+    parser.add_argument('--struct', type=str, default='20', help='struct id')
     parser.add_argument('--dataset', type=str, default='test', help='test')
-    parser.add_argument('--pth_path', type=str, default='pths/25/transfer/200.pth',
+    parser.add_argument('--pth_path', type=str, default='pths/20/transfer/200.pth',
                         help='pth path')
     parser.add_argument('--model_key', type=str,
                         default='model_state_dict', help='model key')
@@ -24,7 +25,10 @@ if __name__ == '__main__':
     dataset = args.dataset
     pth_path = args.pth_path
     model_key = args.model_key
-    meta_dir = f'data/meta/{dataset}/{struct}'
+    if log_transformed:
+        meta_dir = f'data/meta/log_transformed/{dataset}/{struct}'
+    else:
+        meta_dir = f'data/meta/{dataset}/{struct}'
     # ijk_dir = f'data/meta/3d_ijk/{view}'
     save_dir = f'evaluation/{struct}'
     view = utils.get_view_name_by_struct_id(int(struct))
@@ -32,7 +36,7 @@ if __name__ == '__main__':
 
     time = utils.current_time()
     os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, time+'.csv')
+    save_path = os.path.join(save_dir, f'threshold-{threshold}'+'.csv')
     with open(save_path, 'w') as file:
         writer = csv.writer(file)
         header = ['name', 'truth_x', 'truth_y', 'truth_z',
@@ -79,16 +83,43 @@ if __name__ == '__main__':
             for i in range(len(pred_classifier)):
                 if pred_classifier[i][0]>=threshold:
                     num += 1
-                    pred_landmark += (centers[i] + pred_displacement[i])
+                    if log_transformed:
+                        reverse = []
+                        for j in range(len(pred_displacement[i])):
+                            if pred_displacement[i, j] >= 0:
+                                reverse.append(np.exp(pred_displacement[i, j])-1)
+                            else:
+                                reverse.append(-1*(np.exp(-1*(pred_displacement[i, j]))-1))
+                        pred_landmark += (centers[i] + np.array(reverse))
+                    else:
+                        pred_landmark += (centers[i] + pred_displacement[i])
                 if pred_classifier[i][0]>pred_classifier[largest_classifier_idx][0]:
                     largest_classifier_idx = i
             print(num)
             if (num>0):
                 pred_landmark = pred_landmark / num
             else:
-                pred_landmark = centers[largest_classifier_idx] + pred_displacement[largest_classifier_idx]
+                if log_transformed:
+                    pred_reverse = []
+                    for j in range(len(pred_displacement[largest_classifier_idx])):
+                        if pred_displacement[largest_classifier_idx, j] >= 0:
+                            pred_reverse.append(np.exp(pred_displacement[largest_classifier_idx, j])-1)
+                        else:
+                            pred_reverse.append(-1*(np.exp(-1*(pred_displacement[largest_classifier_idx, j]))-1))
+                    pred_landmark = centers[largest_classifier_idx] + np.array(pred_reverse)
+                else:
+                    pred_landmark = centers[largest_classifier_idx] + pred_displacement[largest_classifier_idx]
             
-            landmark = centers[0] + displacement_vector[0]
+            if log_transformed:
+                truth_reverse = []
+                for j in range(len(displacement_vector[0])):
+                    if displacement_vector[0, j] >= 0:
+                        truth_reverse.append(np.exp(displacement_vector[0, j])-1)
+                    else:
+                        truth_reverse.append(-1*(np.exp(-1*(displacement_vector[0, j]))-1))
+                landmark = centers[0] + np.array(truth_reverse)
+            else:
+                landmark = centers[0] + displacement_vector[0]
     
             # dists = np.array(dists)
 

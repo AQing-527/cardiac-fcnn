@@ -1,9 +1,5 @@
 {
-    "struct": "2",
-    "pth_path": "pths/2",
-    "log_path": "logs/2",
-    "train_meta_path": "data/meta/train/2",
-    "val_meta_path": "data/meta/val/2",
+    "struct": "20",
     "epochs": 200,
     "batch_size": 64,
     "lr": 1e-4,

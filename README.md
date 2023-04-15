@@ -89,7 +89,7 @@ python evaluate.py --struct $STRUCT --pth_path $CKPT
     ```
     python recover.py --view $VIEW
     ```
-- `$VIEW` is is the view abbreviation.
+    - `$VIEW` is is the view abbreviation.
 
 - For SAXA, jointly use SAXA's, SAXM's and SAXMV's landmarks to predict the normal. 
     ```
